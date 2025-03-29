@@ -1,21 +1,27 @@
-CXX=g++
-CXXFLAGS=--std=c++11 -W -Wall -O3 -DNDEBUG
+# Compiler and flags
+CXX = g++
+CXXFLAGS = -std=c++17 -W -Wall -O3 -DNDEBUG
 
-SRCS=Solver.cpp
-OBJS=$(subst .cpp,.o,$(SRCS))
+# SFML library paths (adjust if SFML is installed in a custom location)
+SFML_LIBS = -lsfml-graphics -lsfml-window -lsfml-system
+SFML_INCLUDE = /usr/local/include
+SFML_LIB = /usr/local/lib
 
-c4solver:$(OBJS) main.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o c4solver main.o $(OBJS) $(LDLIBS)
+# Source files
+SRCS = main.cpp Solver.cpp GameWindow.cpp
+OBJS = $(SRCS:.cpp=.o)
 
-generator: generator.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o generator generator.o $(LDLIBS)
+# Target executable
+TARGET = c4solver
 
-.depend: $(SRCS)
-	$(CXX) $(CXXFLAGS) -MM $^ > ./.depend
-	
--include .depend
+# Build rules
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS) -I$(SFML_INCLUDE) -L$(SFML_LIB) $(SFML_LIBS)
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -I$(SFML_INCLUDE) -c $< -o $@
 
 clean:
-	rm -f *.o .depend c4solver generator
-
-
+	rm -f $(OBJS) $(TARGET)

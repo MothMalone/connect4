@@ -97,6 +97,21 @@ class Position {
   static_assert(WIDTH < 10, "Board's width must be less than 10");
   static_assert(WIDTH * (HEIGHT + 1) <= sizeof(position_t)*8, "Board does not fit into position_t bitmask");
 
+
+  /**
+     * Get the state of a cell at (row, col).
+     * @param row: 0-based row index.
+     * @param col: 0-based column index.
+     * @return 0 if the cell is empty, 1 if it belongs to the current player, 2 if it belongs to the opponent.
+     */
+    int getCell(int row, int col) const {
+      position_t bit = position_t(1) << (col * (HEIGHT + 1) + row);
+      if (mask & bit) { // Check if the cell is occupied
+          return (current_position & bit) ? 1 : 2; // 1 = current player, 2 = opponent
+      }
+      return 0; // 0 = empty
+  }
+  
   /**
    * Plays a possible move given by its bitmap representation
    *
@@ -243,6 +258,21 @@ class Position {
     return winning_position() & possible() & column_mask(col);
   }
 
+  // Returns true if the previous move resulted in a win (4 in a row).
+  bool wins() const {
+    if(moves == 0) return false;
+    position_t prev = mask ^ current_position;
+    // vertical (shift = 1)
+    if ((prev & (prev >> 1) & (prev >> 2) & (prev >> 3)) != 0) return true;
+    // horizontal (shift = HEIGHT+1)
+    if ((prev & (prev >> (HEIGHT+1)) & (prev >> (2*(HEIGHT+1))) & (prev >> (3*(HEIGHT+1)))) != 0) return true;
+    // diagonal (shift = HEIGHT)
+    if ((prev & (prev >> HEIGHT) & (prev >> (2*HEIGHT)) & (prev >> (3*HEIGHT))) != 0) return true;
+    // anti-diagonal (shift = HEIGHT+2)
+    if ((prev & (prev >> (HEIGHT+2)) & (prev >> (2*(HEIGHT+2))) & (prev >> (3*(HEIGHT+2)))) != 0) return true;
+    return false;
+  }
+
  private:
   position_t current_position; // bitmap of the current_player stones
   position_t mask;             // bitmap of all the already palyed spots
@@ -292,7 +322,7 @@ class Position {
   }
 
   /**
-   * @parmam position, a bitmap of the player to evaluate the winning pos
+   * @parpam position, a bitmap of the player to evaluate the winning pos
    * @param mask, a mask of the already played spots
    *
    * @return a bitmap of all the winning free spots making an alignment
