@@ -42,6 +42,10 @@ private:
     void showNotification(const std::string &message); 
     void evaluateState();
     void showEndGamePopup(const std::string &message);
+
+    void updateButtonHover(sf::RectangleShape& button, const sf::Vector2i& mousePos);
+    sf::Clock animationClock;  // Add this line for timing animations
+
 };
 
 #endif // GAMEWINDOW_HPP

@@ -117,6 +117,17 @@ bool GameWindow::showStartMenu() {
             }
         }
         
+        // Update button hover effects
+        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        updateButtonHover(firstButton, mousePos);
+        updateButtonHover(secondButton, mousePos);
+        
+        // Adjust text positions to match button scaling
+        firstText.setPosition(firstButton.getPosition().x + firstButton.getSize().x / 2.f,
+                            firstButton.getPosition().y + firstButton.getSize().y / 2.f);
+        secondText.setPosition(secondButton.getPosition().x + secondButton.getSize().x / 2.f,
+                             secondButton.getPosition().y + secondButton.getSize().y / 2.f);
+        
         // Draw menu
         window.clear(sf::Color::Blue);
         window.draw(title);
@@ -160,12 +171,6 @@ void GameWindow::processEvents() {
 // Modified update to skip evaluation updates during game over
 void GameWindow::update() {
     if (gameOver) return;
-    if (playerTurn) {
-        statusText.setString("Your Turn");
-    } else {
-        int score = solver.solve(position);
-        statusText.setString("AI's Turn (Evaluation: " + std::to_string(score) + ")");
-    }
 }
 
 void GameWindow::render() {
@@ -189,50 +194,89 @@ void GameWindow::render() {
         }
     }
 
-    // Draw evaluation bar 
+    // In the render() method, replace the evaluation bar code:
     if (!gameOver) {
         int score = solver.solve(position);
         float maxScore = 42.f; // Maximum theoretical score
-        float barWidth = 300.f; // Made wider
-        float barHeight = 30.f; // Made taller
+        float barWidth = 500.f;
+        float barHeight = 20.f;
         
         // Center the bar horizontally
         float barX = (window.getSize().x - barWidth) / 2.f;
         float barY = 10.f;
         
-        // Background bar
+        // Background bar with outline
         sf::RectangleShape evalBarBg(sf::Vector2f(barWidth, barHeight));
         evalBarBg.setFillColor(sf::Color(50, 50, 50));
+        evalBarBg.setOutlineColor(sf::Color::White);
+        evalBarBg.setOutlineThickness(1);
         evalBarBg.setPosition(barX, barY);
         
-        // Calculate normalized position (0.5 is neutral)
-        float normalizedScore = std::clamp((score + maxScore) / (2 * maxScore), 0.f, 1.f);
+        // Use exponential scaling for more dramatic changes near winning positions
+        float normalizedScore;
+        if (score > 0) {
+            normalizedScore = 0.5f + 0.5f * std::min(1.f, std::pow(score / maxScore, 0.5f));
+        } else {
+            normalizedScore = 0.5f - 0.5f * std::min(1.f, std::pow(-score / maxScore, 0.5f));
+        }
+        
         float centerWidth = barWidth * normalizedScore;
         
         // Left side (First player - Red)
         sf::RectangleShape leftBar(sf::Vector2f(centerWidth, barHeight));
-        leftBar.setFillColor(sf::Color::Red);
+        sf::Color leftColor = sf::Color::Red;
+        // Make color more intense when close to winning
+        if (normalizedScore > 0.75f) {
+            leftColor = sf::Color(255, 0, 0, 255); // Bright red
+            // Add pulsing effect for near-win
+            float pulse = (1 + std::sin(animationClock.getElapsedTime().asSeconds() * 5)) / 2;
+            leftColor.a = 128 + static_cast<sf::Uint8>(127 * pulse);
+        }
+        leftBar.setFillColor(leftColor);
         leftBar.setPosition(barX, barY);
         
         // Right side (Second player - Yellow)
         sf::RectangleShape rightBar(sf::Vector2f(barWidth - centerWidth, barHeight));
-        rightBar.setFillColor(sf::Color::Yellow);
+        sf::Color rightColor = sf::Color::Yellow;
+        // Make color more intense when close to winning
+        if (normalizedScore < 0.25f) {
+            rightColor = sf::Color(255, 255, 0, 255); // Bright yellow
+            // Add pulsing effect for near-win
+            float pulse = (1 + std::sin(animationClock.getElapsedTime().asSeconds() * 5)) / 2;
+            rightColor.a = 128 + static_cast<sf::Uint8>(127 * pulse);
+        }
+        rightBar.setFillColor(rightColor);
         rightBar.setPosition(barX + centerWidth, barY);
         
-        // Score text
+        // Add markers for critical thresholds
+        sf::RectangleShape centerLine(sf::Vector2f(2, barHeight));
+        centerLine.setFillColor(sf::Color(200, 200, 200, 128));
+        centerLine.setPosition(barX + barWidth/2, barY);
+        
+        // Score text with additional info
         sf::Text scoreText;
         scoreText.setFont(font);
         scoreText.setCharacterSize(16);
-        scoreText.setFillColor(sf::Color::White);
-        scoreText.setString(std::to_string(score));
+        scoreText.setFillColor(sf::Color::Black);
+        
+        // Add winning chance percentage
+        float winChance = std::clamp((normalizedScore - 0.5f) * 2.f, -1.f, 1.f);
+        std::string scoreStr = std::to_string(score);
+        if (winChance > 0) {
+            scoreStr += " (+" + std::to_string(static_cast<int>(winChance * 100)) + "%)";
+        } else if (winChance < 0) {
+            scoreStr += " (" + std::to_string(static_cast<int>(winChance * 100)) + "%)";
+        }
+        scoreText.setString(scoreStr);
         
         // Center the score text above the bar
         sf::FloatRect textBounds = scoreText.getLocalBounds();
-        scoreText.setOrigin(textBounds.width / 2.f, textBounds.height + 5);
+        scoreText.setOrigin(textBounds.width / 2.f, textBounds.height - 13);
         scoreText.setPosition(barX + barWidth / 2.f, barY);
         
         // Draw everything
         window.draw(evalBarBg);
+        window.draw(centerLine);
         window.draw(leftBar);
         window.draw(rightBar);
         window.draw(scoreText);
@@ -370,13 +414,7 @@ void GameWindow::evaluateState() {
             bestScore = score;
         }
     }
-    
-    // Update status text with position evaluation
-    if (bestScore != GameSolver::Connect4::Solver::INVALID_MOVE) {
-        std::string evalString = (playerTurn ? "Your" : "AI's") + std::string(" turn (Eval: ") + 
-                               std::to_string(bestScore) + ")";
-        statusText.setString(evalString);
-    }
+
 }
 
 
@@ -439,10 +477,16 @@ void GameWindow::showEndGamePopup(const std::string& message) {
                 }
             }
         }
+        // Update replay button hover effect
+        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        updateButtonHover(replayButton, mousePos);
+        
+        // Adjust replay text position to match button scaling
+        replayText.setPosition(replayButton.getPosition().x + replayButton.getSize().x / 2.f,
+                             replayButton.getPosition().y + replayButton.getSize().y / 2.f);
+
         window.clear(sf::Color::Blue);
-        // Draw the captured board snapshot
         window.draw(boardSprite);
-        // Draw the overlay and pop-up elements
         window.draw(overlay);
         window.draw(popup);
         window.draw(popupText);
@@ -456,5 +500,18 @@ void GameWindow::showEndGamePopup(const std::string& message) {
     playerTurn = true;
     bool playerGoesFirst = showStartMenu();
     resetGame(playerGoesFirst);
+}
+
+
+void GameWindow::updateButtonHover(sf::RectangleShape& button, const sf::Vector2i& mousePos) {
+    if (button.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+        button.setFillColor(sf::Color(80, 80, 255)); // Lighter blue when hovering
+        button.setScale(1.05f, 1.05f);  // Slightly larger
+        button.setOutlineThickness(3);   // Thicker outline
+    } else {
+        button.setFillColor(sf::Color(50, 50, 250)); // Normal blue
+        button.setScale(1.0f, 1.0f);     // Normal size
+        button.setOutlineThickness(2);    // Normal outline
+    }
 }
 
