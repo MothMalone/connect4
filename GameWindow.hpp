@@ -20,6 +20,10 @@ private:
     GameSolver::Connect4::Solver solver;
     bool playerTurn; 
     bool gameOver; 
+
+
+    bool showStartMenu(); // Returns true if player wants to go first
+    void resetGame(bool playerGoesFirst);
     
   
     float topMargin;  

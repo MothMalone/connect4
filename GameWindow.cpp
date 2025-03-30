@@ -36,7 +36,98 @@ GameWindow::GameWindow()
     solver.reset(); // Reset the solver's state
     solver.loadBook("7x6.book"); // Load an opening book (optional)
 
+    playerTurn = showStartMenu();
     gameOver = false; // initialize gameOver flag
+    if (!playerTurn) {
+        // If AI goes first, make its move
+        aiMove();
+    }
+}
+
+void GameWindow::resetGame(bool playerGoesFirst) {
+
+    position = GameSolver::Connect4::Position();
+    gameOver = false;
+    playerTurn = playerGoesFirst;
+
+    if (!playerTurn) {
+        aiMove();
+    }
+}
+
+bool GameWindow::showStartMenu() {
+    sf::RectangleShape firstButton(sf::Vector2f(300, 80));
+    sf::RectangleShape secondButton(sf::Vector2f(300, 80));
+
+    // Position buttons
+    firstButton.setPosition(window.getSize().x/2 - 150, 200);
+    secondButton.setPosition(window.getSize().x/2 - 150, 300);
+
+    // Setup button styling
+    firstButton.setFillColor(sf::Color(50, 50, 250));
+    secondButton.setFillColor(sf::Color(50, 50, 250));
+    firstButton.setOutlineThickness(2);
+    secondButton.setOutlineThickness(2);
+    firstButton.setOutlineColor(sf::Color::White);
+    secondButton.setOutlineColor(sf::Color::White);
+
+    // Setup text
+    sf::Text title, firstText, secondText;
+    title.setFont(font);
+    firstText.setFont(font);
+    secondText.setFont(font);
+
+    title.setString("Choose Your Turn Order");
+    firstText.setString("Play First");
+    secondText.setString("Play Second");
+
+    title.setCharacterSize(32);
+    firstText.setCharacterSize(24);
+    secondText.setCharacterSize(24);
+
+    // Center the text
+    sf::FloatRect titleBounds = title.getLocalBounds();
+    title.setOrigin(titleBounds.width/2, titleBounds.height/2);
+    title.setPosition(window.getSize().x/2, 100);
+
+    sf::FloatRect firstBounds = firstText.getLocalBounds();
+    firstText.setOrigin(firstBounds.width/2, firstBounds.height/2);
+    firstText.setPosition(window.getSize().x/2, 240);
+
+    sf::FloatRect secondBounds = secondText.getLocalBounds();
+    secondText.setOrigin(secondBounds.width/2, secondBounds.height/2);
+    secondText.setPosition(window.getSize().x/2, 340);
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
+                window.close();
+                return true;
+            }
+            if (event.type == sf::Event::MouseButtonPressed) {
+                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+                
+                if (firstButton.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+                    return true;  // Player goes first
+                }
+                if (secondButton.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
+                    return false; // AI goes first
+                }
+            }
+        }
+        
+        // Draw menu
+        window.clear(sf::Color::Blue);
+        window.draw(title);
+        window.draw(firstButton);
+        window.draw(secondButton);
+        window.draw(firstText);
+        window.draw(secondText);
+        window.display();
+    }
+
+    return true; // Default to player first if window is closed
 }
 
 void GameWindow::run() {
@@ -56,9 +147,8 @@ void GameWindow::processEvents() {
         } else if (event.type == sf::Event::MouseButtonPressed) {
             if (gameOver) {
                 // Reset the game on click if game is over
-                position = GameSolver::Connect4::Position();
-                gameOver = false;
-                playerTurn = true;
+                bool playerGoesFirst = showStartMenu();
+                resetGame(playerGoesFirst);
             } else if (playerTurn && event.mouseButton.button == sf::Mouse::Left) {
                 int column = event.mouseButton.x / cellWidth; 
                 handlePlayerMove(column);
@@ -97,6 +187,55 @@ void GameWindow::render() {
             }
             window.draw(boardCells[drawRow][col]);
         }
+    }
+
+    // Draw evaluation bar 
+    if (!gameOver) {
+        int score = solver.solve(position);
+        float maxScore = 42.f; // Maximum theoretical score
+        float barWidth = 300.f; // Made wider
+        float barHeight = 30.f; // Made taller
+        
+        // Center the bar horizontally
+        float barX = (window.getSize().x - barWidth) / 2.f;
+        float barY = 10.f;
+        
+        // Background bar
+        sf::RectangleShape evalBarBg(sf::Vector2f(barWidth, barHeight));
+        evalBarBg.setFillColor(sf::Color(50, 50, 50));
+        evalBarBg.setPosition(barX, barY);
+        
+        // Calculate normalized position (0.5 is neutral)
+        float normalizedScore = std::clamp((score + maxScore) / (2 * maxScore), 0.f, 1.f);
+        float centerWidth = barWidth * normalizedScore;
+        
+        // Left side (First player - Red)
+        sf::RectangleShape leftBar(sf::Vector2f(centerWidth, barHeight));
+        leftBar.setFillColor(sf::Color::Red);
+        leftBar.setPosition(barX, barY);
+        
+        // Right side (Second player - Yellow)
+        sf::RectangleShape rightBar(sf::Vector2f(barWidth - centerWidth, barHeight));
+        rightBar.setFillColor(sf::Color::Yellow);
+        rightBar.setPosition(barX + centerWidth, barY);
+        
+        // Score text
+        sf::Text scoreText;
+        scoreText.setFont(font);
+        scoreText.setCharacterSize(16);
+        scoreText.setFillColor(sf::Color::White);
+        scoreText.setString(std::to_string(score));
+        
+        // Center the score text above the bar
+        sf::FloatRect textBounds = scoreText.getLocalBounds();
+        scoreText.setOrigin(textBounds.width / 2.f, textBounds.height + 5);
+        scoreText.setPosition(barX + barWidth / 2.f, barY);
+        
+        // Draw everything
+        window.draw(evalBarBg);
+        window.draw(leftBar);
+        window.draw(rightBar);
+        window.draw(scoreText);
     }
 
 
@@ -315,6 +454,7 @@ void GameWindow::showEndGamePopup(const std::string& message) {
     position = GameSolver::Connect4::Position();
     gameOver = false;
     playerTurn = true;
-    statusText.setString("Your Turn");
+    bool playerGoesFirst = showStartMenu();
+    resetGame(playerGoesFirst);
 }
 
